@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>The Garden of Recollection · Fix Gambar & Double Jump</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            background: #0f1f2f;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            position: fixed;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', monospace;
+            touch-action: none;
+        }
+
+        .game-wrapper {
+            background: #162b37;
+            padding: 10px;
+            border-radius: 30px;
+            box-shadow: 0 20px 30px rgba(0,0,0,0.6);
+            width: 98vw;
+            max-width: 1000px;
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            border-radius: 20px;
+            background: #aad0e6;
+            width: 100%;
+            height: auto;
+            aspect-ratio: 16 / 9;
+            touch-action: none;
+        }
+
+        .control-panel {
+            background: #1c3c4a;
+            border-radius: 30px;
+            margin-top: 10px;
+            padding: 10px;
+        }
+
+        .touch-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .left-right {
+            display: flex;
+            gap: 10px;
+            background: #1c5569;
+            padding: 5px 15px;
+            border-radius: 40px;
+        }
+
+        .ctrl-btn {
+            background: #d4eafc;
+            border: none;
+            width: 50px;
+            height: 50px;
+            border-radius: 25px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #0b3d52;
+            box-shadow: 0 4px 0 #4b7e9c;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .ctrl-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 1px 0 #4b7e9c;
+        }
+
+        .action-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .jump-btn {
+            background: #f5bc7c;
+            width: 100px;
+            height: 50px;
+            border-radius: 25px;
+            font-size: 20px;
+            box-shadow: 0 4px 0 #b87d40;
+            border: none;
+        }
+
+        .restart-btn {
+            background: #b89e84;
+            width: 50px;
+            height: 50px;
+            border-radius: 25px;
+            font-size: 24px;
+            box-shadow: 0 4px 0 #74624b;
+            border: none;
+        }
+
+        .bubble-panel {
+            background: #faf0db;
+            border: 3px solid #8f7c63;
+            border-radius: 30px 30px 30px 10px;
+            padding: 10px 15px;
+            margin: 10px 0 5px;
+            font-size: 1rem;
+            min-height: 70px;
+            cursor: pointer;
+        }
+
+        .bubble-panel span {
+            background: #1f4a60;
+            color: white;
+            padding: 3px 12px;
+            border-radius: 20px;
+            margin-right: 8px;
+            display: inline-block;
+        }
+
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 10px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 30px;
+        }
+
+        .lives {
+            font-size: 1.5rem;
+        }
+
+        .audio-btn {
+            background: #4a6b7f;
+            border: none;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            margin-top: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+<div class="game-wrapper">
+    <canvas id="gameCanvas" width="1000" height="562"></canvas>
+
+    <div class="control-panel">
+        <div class="touch-panel">
+            <div class="left-right">
+                <button class="ctrl-btn" id="arrowLeft">←</button>
+                <button class="ctrl-btn" id="arrowRight">→</button>
+            </div>
+            <div class="action-group">
+                <button class="ctrl-btn jump-btn" id="jumpBtn">JUMP</button>
+                <button class="ctrl-btn restart-btn" id="restartBtn">↻</button>
+            </div>
+        </div>
+
+        <div id="bubble" class="bubble-panel">
+            <span>🗑️ Trashcan</span> Klik untuk memulai quest...
+        </div>
+        
+        <div class="status-bar">
+            <span>Double Jump | Injak musuh | 3 nyawa</span>
+            <div id="livesDisplay" class="lives">❤️❤️❤️</div>
+        </div>
+        
+        <button class="audio-btn" id="toggleMusic">🔊 Musik</button>
+    </div>
+</div>
+
+<script>
+    (function() {
+        // ===== INIT CANVAS =====
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const bubbleDiv = document.getElementById('bubble');
+        const livesDisplay = document.getElementById('livesDisplay');
+        const toggleMusicBtn = document.getElementById('toggleMusic');
+
+        // ===== LOAD GAMBAR JPG =====
+        const images = {
+            stele: new Image(),
+            trashcan: new Image(),
+            enemy1: new Image(),
+            enemy2: new Image(),
+            blackswan: new Image()
+        };
+
+        // Set source ke file JPG
+        images.stele.src = 'stele.jpg';
+        images.trashcan.src = 'trashcan.jpg';
+        images.enemy1.src = 'enemy1.jpg';
+        images.enemy2.src = 'enemy2.jpg';
+        images.blackswan.src = 'blackswan.jpg';
+
+        // Flag untuk gambar sudah siap
+        let imagesReady = false;
+        let loadedCount = 0;
+        
+        function imageLoaded() {
+            loadedCount++;
+            if (loadedCount === 5) {
+                imagesReady = true;
+                console.log('Semua gambar siap');
+            }
+        }
+
+        images.stele.onload = imageLoaded;
+        images.stele.onerror = imageLoaded; // Tetap lanjut walau error
+        
+        images.trashcan.onload = imageLoaded;
+        images.trashcan.onerror = imageLoaded;
+        
+        images.enemy1.onload = imageLoaded;
+        images.enemy1.onerror = imageLoaded;
+        
+        images.enemy2.onload = imageLoaded;
+        images.enemy2.onerror = imageLoaded;
+        
+        images.blackswan.onload = imageLoaded;
+        images.blackswan.onerror = imageLoaded;
+
+        // ===== GAME VARIABLES =====
+        const GROUND_Y = 480;
+        const GRAVITY = 0.5;
+        
+        // Ukuran karakter
+        const PLAYER_WIDTH = 70;
+        const PLAYER_HEIGHT = 95;
+        const ENEMY_WIDTH = 70;
+        const ENEMY_HEIGHT = 80;
+        const NPC_WIDTH = 85;
+        const NPC_HEIGHT = 110;
+        const SWAN_WIDTH = 110;
+        const SWAN_HEIGHT = 125;
+        
+        // Player object
+        let player = {
+            x: 200,
+            y: GROUND_Y - PLAYER_HEIGHT,
+            vx: 0,
+            vy: 0,
+            width: PLAYER_WIDTH,
+            height: PLAYER_HEIGHT,
+            onGround: false,
+            doubleJumpUsed: false,
+            lives: 3,
+            invincible: 0,
+            wasJumpPressed: false
+        };
+
+        // Camera
+        let cameraX = 0;
+        
+        // Game state
+        let gameActive = false;
+        let gameOver = false;
+        let blackScreenActive = false;
+        
+        // Quest
+        let questPhase = 0; // 0:start, 1:dialog, 2:playing
+        let dialogIndex = 0;
+        
+        // NPC Trashcan - POSISI FIX DI FRAME
+        const trashcan = {
+            x: 150,
+            y: GROUND_Y - NPC_HEIGHT,
+            width: NPC_WIDTH,
+            height: NPC_HEIGHT,
+            talked: false
+        };
+        
+        // Blackswan
+        let blackSwan = {
+            x: 9500,
+            y: GROUND_Y - SWAN_HEIGHT,
+            width: SWAN_WIDTH,
+            height: SWAN_HEIGHT,
+            met: false
+        };
+
+        // Dialog texts
+        const questDialogues = [
+            { speaker: "🗑️ Trashcan", text: "Stele! Anggota The Garden menghilang dalam memori!" },
+            { speaker: "🗑️ Trashcan", text: "Blackswan menanti di ujung taman dengan kunci ingatan." },
+            { speaker: "🗑️ Trashcan", text: "Kau bisa double jump! Tekan JUMP sekali lagi di udara." },
+            { speaker: "🗑️ Trashcan", text: "Kau punya 3 nyawa, gunakan baik-baik!" },
+            { speaker: "✨ System", text: "QUEST DITERIMA! Cari Blackswan di ujung taman!" }
+        ];
+
+        // ===== PLATFORMS =====
+        let platforms = [];
+        
+        // Ground platforms (pasti ada di frame awal)
+        for (let x = 0; x < 10000; x += 100) {
+            platforms.push({ x: x, y: GROUND_Y, w: 120, h: 30 });
+        }
+        
+        // Floating platforms tambahan
+        const floatY = [380, 320, 360, 290, 370, 310, 340, 270, 380, 300, 350, 260];
+        const floatX = [400, 900, 1400, 2000, 2600, 3200, 3800, 4400, 5000, 5600, 6200, 6800];
+        
+        for (let i = 0; i < floatX.length; i++) {
+            platforms.push({ x: floatX[i], y: floatY[i], w: 180, h: 25 });
+        }
+
+        // ===== ENEMIES =====
+        let enemies = [];
+        
+        // Ground enemies
+        const e1X = [600, 1600, 2500, 3400, 4300, 5200, 6100, 7000, 7900, 8800];
+        for (let i = 0; i < e1X.length; i++) {
+            enemies.push({
+                x: e1X[i],
+                y: GROUND_Y - ENEMY_HEIGHT,
+                w: ENEMY_WIDTH,
+                h: ENEMY_HEIGHT,
+                type: 'ground',
+                speed: 1.5,
+                dir: 1,
+                dead: false,
+                patrolMin: e1X[i] - 200,
+                patrolMax: e1X[i] + 200
+            });
+        }
+        
+        // Air enemies
+        const e2X = [800, 1800, 2800, 3800, 4800, 5800, 6800, 7800, 8800, 9800];
+        for (let i = 0; i < e2X.length; i++) {
+            enemies.push({
+                x: e2X[i],
+                y: 300 + (i * 20) % 150,
+                w: ENEMY_WIDTH - 10,
+                h: ENEMY_HEIGHT - 10,
+                type: 'air',
+                speed: 1.2,
+                dir: 1,
+                dead: false,
+                startY: 300 + (i * 20) % 150
+            });
+        }
+
+        // ===== AUDIO =====
+        let backgroundMusic = null;
+        let blackswanSound = null;
+        let isMusicMuted = false;
+
+        try {
+            backgroundMusic = new Audio('background.mp3');
+            backgroundMusic.loop = true;
+            backgroundMusic.volume = 0.3;
+            
+            blackswanSound = new Audio('blackswan.mp3');
+            blackswanSound.loop = false;
+            blackswanSound.volume = 0.5;
+        } catch(e) {}
+
+        toggleMusicBtn.onclick = () => {
+            isMusicMuted = !isMusicMuted;
+            if (backgroundMusic) backgroundMusic.muted = isMusicMuted;
+            if (blackswanSound) blackswanSound.muted = isMusicMuted;
+            toggleMusicBtn.textContent = isMusicMuted ? '🔇 Musik' : '🔊 Musik';
+        };
+
+        // ===== CONTROLS =====
+        const keys = {};
+        
+        function setupButton(btnId, key) {
+            const btn = document.getElementById(btnId);
+            if (!btn) return;
+            
+            btn.addEventListener('mousedown', (e) => { e.preventDefault(); keys[key] = true; });
+            btn.addEventListener('mouseup', () => { keys[key] = false; });
+            btn.addEventListener('mouseleave', () => { keys[key] = false; });
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[key] = true; });
+            btn.addEventListener('touchend', () => { keys[key] = false; });
+            btn.addEventListener('touchcancel', () => { keys[key] = false; });
+        }
+
+        setupButton('arrowLeft', 'ArrowLeft');
+        setupButton('arrowRight', 'ArrowRight');
+        setupButton('jumpBtn', 'Space');
+
+        // Keyboard
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+            keys[e.code] = true;
+        });
+        window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+        // ===== DIALOG CLICK =====
+        bubbleDiv.addEventListener('click', () => {
+            if (gameOver) return;
+            
+            if (questPhase === 0) {
+                questPhase = 1;
+                dialogIndex = 0;
+                updateDialog();
+            } else if (questPhase === 1) {
+                if (dialogIndex < questDialogues.length - 1) {
+                    dialogIndex++;
+                    updateDialog();
+                } else {
+                    questPhase = 2;
+                    gameActive = true;
+                    trashcan.talked = true;
+                    bubbleDiv.innerHTML = `<span>✨ Info</span> Cari Blackswan di ujung taman! (Double jump tersedia)`;
+                    
+                    if (backgroundMusic && !isMusicMuted) {
+                        backgroundMusic.play().catch(() => {});
+                    }
+                }
+            }
+        });
+
+        function updateDialog() {
+            if (questPhase === 1 && dialogIndex < questDialogues.length) {
+                let d = questDialogues[dialogIndex];
+                bubbleDiv.innerHTML = `<span>${d.speaker}</span> ${d.text}`;
+            }
+        }
+
+        // ===== RESTART =====
+        document.getElementById('restartBtn').addEventListener('click', () => {
+            player = {
+                x: 200, y: GROUND_Y - PLAYER_HEIGHT,
+                vx: 0, vy: 0,
+                width: PLAYER_WIDTH, height: PLAYER_HEIGHT,
+                onGround: false, doubleJumpUsed: false,
+                lives: 3, invincible: 0,
+                wasJumpPressed: false
+            };
+            
+            cameraX = 0;
+            gameActive = false;
+            questPhase = 0;
+            dialogIndex = 0;
+            gameOver = false;
+            blackSwan.met = false;
+            trashcan.talked = false;
+            
+            if (backgroundMusic) {
+                backgroundMusic.pause();
+                backgroundMusic.currentTime = 0;
+            }
+            if (blackswanSound) {
+                blackswanSound.pause();
+                blackswanSound.currentTime = 0;
+            }
+            
+            // Reset enemies
+            enemies = [];
+            const e1X = [600, 1600, 2500, 3400, 4300, 5200, 6100, 7000, 7900, 8800];
+            for (let i = 0; i < e1X.length; i++) {
+                enemies.push({
+                    x: e1X[i],
+                    y: GROUND_Y - ENEMY_HEIGHT,
+                    w: ENEMY_WIDTH,
+                    h: ENEMY_HEIGHT,
+                    type: 'ground',
+                    speed: 1.5,
+                    dir: 1,
+                    dead: false,
+                    patrolMin: e1X[i] - 200,
+                    patrolMax: e1X[i] + 200
+                });
+            }
+            
+            const e2X = [800, 1800, 2800, 3800, 4800, 5800, 6800, 7800, 8800, 9800];
+            for (let i = 0; i < e2X.length; i++) {
+                enemies.push({
+                    x: e2X[i],
+                    y: 300 + (i * 20) % 150,
+                    w: ENEMY_WIDTH - 10,
+                    h: ENEMY_HEIGHT - 10,
+                    type: 'air',
+                    speed: 1.2,
+                    dir: 1,
+                    dead: false,
+                    startY: 300 + (i * 20) % 150
+                });
+            }
+            
+            bubbleDiv.innerHTML = `<span>🗑️ Trashcan</span> Klik untuk memulai quest...`;
+            updateLivesDisplay();
+        });
+
+        // ===== UTILITIES =====
+        function updateLivesDisplay() {
+            let hearts = '';
+            for (let i = 0; i < 3; i++) {
+                hearts += (i < player.lives) ? '❤️' : '🖤';
+            }
+            livesDisplay.innerHTML = hearts;
+        }
+
+        function checkCollision(r1, r2) {
+            return !(r2.x >= r1.x + r1.w || r2.x + r2.w <= r1.x ||
+                     r2.y >= r1.y + r1.h || r2.y + r2.h <= r1.y);
+        }
+
+        // ===== GAME UPDATE =====
+        function update() {
+            if (gameOver || !gameActive) return;
+
+            // Game over check
+            if (player.lives <= 0) {
+                gameOver = true;
+                gameActive = false;
+                bubbleDiv.innerHTML = `<span>💀 Game Over</span> Klik restart`;
+                if (backgroundMusic) backgroundMusic.pause();
+                return;
+            }
+
+            // Invincibility
+            if (player.invincible > 0) {
+                player.invincible--;
+            }
+
+            // Horizontal movement
+            let move = 0;
+            if (keys['ArrowLeft']) move = -5;
+            if (keys['ArrowRight']) move = 5;
+            player.vx = move;
+            player.x += player.vx;
+
+            // DOUBLE JUMP FIX - Deteksi tekan tombol
+            const jumpPressed = keys['Space'];
+            
+            if (jumpPressed && !player.wasJumpPressed) {
+                if (player.onGround) {
+                    // First jump
+                    player.vy = -12;
+                    player.doubleJumpUsed = false;
+                    player.onGround = false;
+                } else if (!player.doubleJumpUsed) {
+                    // Double jump
+                    player.vy = -10;
+                    player.doubleJumpUsed = true;
+                }
+            }
+            player.wasJumpPressed = jumpPressed;
+
+            // Gravity
+            player.vy += GRAVITY;
+            player.y += player.vy;
+
+            // Platform collision
+            player.onGround = false;
+            for (let pl of platforms) {
+                if (checkCollision(
+                    {x: player.x, y: player.y, w: player.width, h: player.height},
+                    {x: pl.x, y: pl.y, w: pl.w, h: pl.h}
+                )) {
+                    // Bottom collision (landing)
+                    if (player.vy >= 0 && player.y + player.height > pl.y && player.y < pl.y) {
+                        player.y = pl.y - player.height;
+                        player.vy = 0;
+                        player.onGround = true;
+                        player.doubleJumpUsed = false; // Reset double jump saat landing
+                    }
+                    // Top collision (head hit)
+                    else if (player.vy < 0) {
+                        player.y = pl.y + pl.h;
+                        player.vy = 0;
+                    }
+                    // Side collision
+                    else if (player.vx > 0) {
+                        player.x = pl.x - player.width;
+                    } else if (player.vx < 0) {
+                        player.x = pl.x + pl.w;
+                    }
+                }
+            }
+
+            // Fall death
+            if (player.y + player.height > GROUND_Y + 200) {
+                player.lives--;
+                updateLivesDisplay();
+                if (player.lives > 0) {
+                    player.x = 200;
+                    player.y = GROUND_Y - PLAYER_HEIGHT;
+                    player.vx = 0;
+                    player.vy = 0;
+                    player.invincible = 100;
+                }
+                return;
+            }
+
+            // Enemy movement and collision
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let e = enemies[i];
+                if (e.dead) continue;
+
+                // Move enemy
+                if (e.type === 'ground') {
+                    e.x += e.speed * e.dir;
+                    if (e.x < e.patrolMin || e.x > e.patrolMax) {
+                        e.dir *= -1;
+                    }
+                } else {
+                    // Air enemy floating
+                    e.y = e.startY + Math.sin(Date.now() * 0.003 + i) * 30;
+                }
+
+                // Enemy collision
+                if (player.invincible <= 0 && checkCollision(
+                    {x: player.x, y: player.y, w: player.width, h: player.height},
+                    {x: e.x, y: e.y, w: e.w, h: e.h}
+                )) {
+                    // Kalo player jatuh di atas enemy
+                    if (player.vy > 0 && player.y + player.height - player.vy < e.y + 10) {
+                        e.dead = true;
+                        player.vy = -8; // Mantul
+                    } else {
+                        // Kena musuh dari samping
+                        player.lives--;
+                        updateLivesDisplay();
+                        if (player.lives > 0) {
+                            player.invincible = 100; // Invincible setelah kena
+                        } else {
+                            gameActive = false;
+                        }
+                        return;
+                    }
+                }
+            }
+
+            // Camera follow
+            cameraX = player.x - 450;
+            if (cameraX < 0) cameraX = 0;
+            if (cameraX > 9000) cameraX = 9000;
+
+            // Blackswan encounter
+            if (!blackSwan.met && player.x > 9400) {
+                blackSwan.met = true;
+                gameActive = false;
+                
+                if (backgroundMusic) backgroundMusic.pause();
+                if (blackswanSound && !isMusicMuted) {
+                    blackswanSound.play().catch(() => {});
+                }
+                
+                const blackswanDialog = [
+                    "Stele (Jeremy)... akhirnya kau tiba.",
+                    "Hari ini hari ulang tahunmu...",
+                    "Selamat ulang tahun, Jeremy!",
+                    "The Garden akan selalu menjagamu."
+                ];
+                
+                let i = 0;
+                bubbleDiv.innerHTML = `<span>🦢 Blackswan</span> ${blackswanDialog[i]}`;
+                
+                let interval = setInterval(() => {
+                    i++;
+                    if (i < blackswanDialog.length) {
+                        bubbleDiv.innerHTML = `<span>🦢 Blackswan</span> ${blackswanDialog[i]}`;
+                    } else {
+                        clearInterval(interval);
+                        setTimeout(() => {
+                            blackScreenActive = true;
+                            bubbleDiv.innerHTML = '<span>🌑</span> THE END';
+                        }, 2000);
+                    }
+                }, 3000);
+            }
+        }
+
+        // ===== DRAW =====
+        function draw() {
+            ctx.clearRect(0, 0, 1000, 562);
+            ctx.save();
+            ctx.translate(-cameraX, 0);
+
+            // Sky
+            ctx.fillStyle = '#a3d0e8';
+            ctx.fillRect(cameraX, 0, 1100, 562);
+
+            // Platforms
+            ctx.fillStyle = '#8b6f4c';
+            platforms.forEach(p => {
+                ctx.fillRect(p.x, p.y, p.w, p.h);
+            });
+
+            // TRASHCAN - Pasti muncul di frame
+            if (!trashcan.talked || questPhase < 2) {
+                if (images.trashcan.complete && images.trashcan.naturalHeight > 0) {
+                    ctx.drawImage(images.trashcan, trashcan.x, trashcan.y, trashcan.width, trashcan.height);
+                } else {
+                    // Fallback kotak dengan emoji
+                    ctx.fillStyle = '#5f5a4b';
+                    ctx.fillRect(trashcan.x, trashcan.y, trashcan.width, trashcan.height);
+                    ctx.font = '40px monospace';
+                    ctx.fillStyle = 'white';
+                    ctx.fillText('🗑️', trashcan.x + 20, trashcan.y + 70);
+                }
+            }
+
+            // Enemies
+            enemies.forEach(e => {
+                if (e.dead) return;
+                
+                if (e.type === 'ground') {
+                    if (images.enemy1.complete && images.enemy1.naturalHeight > 0) {
+                        ctx.drawImage(images.enemy1, e.x, e.y, e.w, e.h);
+                    } else {
+                        ctx.fillStyle = '#c04f2c';
+                        ctx.fillRect(e.x, e.y, e.w, e.h);
+                    }
+                } else {
+                    if (images.enemy2.complete && images.enemy2.naturalHeight > 0) {
+                        ctx.drawImage(images.enemy2, e.x, e.y, e.w, e.h);
+                    } else {
+                        ctx.fillStyle = '#5d75a8';
+                        ctx.fillRect(e.x, e.y, e.w, e.h);
+                    }
+                }
+            });
+
+            // Player
+            if (player.invincible % 10 < 5) { // Blinking effect
+                if (images.stele.complete && images.stele.naturalHeight > 0) {
+                    ctx.drawImage(images.stele, player.x, player.y, player.width, player.height);
+                } else {
+                    ctx.fillStyle = '#2f918b';
+                    ctx.fillRect(player.x, player.y, player.width, player.height);
+                }
+            }
+
+            // Blackswan
+            if (images.blackswan.complete && images.blackswan.naturalHeight > 0) {
+                ctx.drawImage(images.blackswan, blackSwan.x, blackSwan.y, blackSwan.width, blackSwan.height);
+            } else {
+                ctx.fillStyle = '#1f262e';
+                ctx.fillRect(blackSwan.x, blackSwan.y, blackSwan.width, blackSwan.height);
+            }
+
+            ctx.restore();
+
+            // Black screen
+            if (blackScreenActive) {
+                ctx.fillStyle = 'black';
+                ctx.fillRect(0, 0, 1000, 562);
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 48px monospace';
+                ctx.fillText('THE END', 350, 300);
+            }
+        }
+
+        // ===== GAME LOOP =====
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        gameLoop();
+        updateLivesDisplay();
+    })();
+</script>
+</body>
+</html>
